@@ -16,18 +16,14 @@ study-material/
 │   ├── kubernetes-fundamentals.md (15 cards)
 │   ├── kubernetes-advanced.md (14 cards)
 │   └── kubernetes-production.md (15 cards)
-├── cloud/               # Cloud platforms
-│   ├── gcp/
-│   │   ├── gcp-services.md (15 cards)
-│   │   ├── gcp-architecture.md (14 cards)
-│   │   ├── gcp-networking.md (14 cards)
-│   │   └── gcp-storage-databases.md (14 cards)
-│   └── aws/
-│       └── aws-fundamentals.md (14 cards)
-├── languages/           # Language learning
-│   └── spanish-basics.md (20 reverse cards = 40 total)
-└── general-knowledge/   # General trivia and facts
-    └── world-capitals.md (10 cards)
+└── cloud/               # Cloud platforms
+    ├── gcp/
+    │   ├── gcp-services.md (15 cards)
+    │   ├── gcp-architecture.md (14 cards)
+    │   ├── gcp-networking.md (14 cards)
+    │   └── gcp-storage-databases.md (14 cards)
+    └── aws/
+        └── aws-fundamentals.md (14 cards)
 ```
 
 ---
@@ -154,40 +150,6 @@ study-material/
 - Service Mesh (Istio)
 
 **Perfect for**: Production Kubernetes, SRE, platform architects
-
----
-
-### 🌍 Languages
-
-#### spanish-basics.md
-**Deck**: Languages/Spanish/Basics
-**Cards**: 20 (40 with reverse)
-**Type**: Reverse cards (bidirectional)
-**Topics**:
-- Greetings (hola, adiós)
-- Polite phrases (gracias, por favor)
-- Basic conversation starters
-- Numbers 1-3
-- Common foods
-
-**Perfect for**: Spanish language learners, travelers
-
-**Note**: Uses **reverse card type**, so you'll see:
-- English → Spanish
-- Spanish → English
-
----
-
-### 🌎 General Knowledge
-
-#### world-capitals.md
-**Deck**: General-Knowledge/Geography/Capitals
-**Cards**: 10
-**Topics**:
-- Major world capitals
-- Tricky ones marked (Canberra, Brasília, Ankara, Ottawa)
-
-**Perfect for**: Trivia, general knowledge, geography enthusiasts
 
 ---
 
@@ -341,27 +303,24 @@ Feel free to add more `.md` files! Ideas:
 - `algorithms-data-structures.md`
 
 ### DevOps
-- `kubernetes-basics.md`
 - `nginx-configuration.md`
 - `bash-scripting.md`
 - `ci-cd-concepts.md`
+- `terraform-basics.md`
+- `ansible-playbooks.md`
 
-### Languages
-- `french-basics.md`
-- `german-basics.md`
-- `japanese-hiragana.md`
-
-### General Knowledge
-- `us-presidents.md`
-- `periodic-table.md`
-- `world-history.md`
-- `astronomy-basics.md`
+### Cloud
+- `aws-advanced.md`
+- `azure-fundamentals.md`
+- `gcp-security.md`
+- `cloud-architecture-patterns.md`
 
 ### Professional
 - `system-design-concepts.md`
-- `behavioral-interview-questions.md`
 - `networking-basics.md`
 - `security-concepts.md`
+- `database-design.md`
+- `api-design-patterns.md`
 
 ---
 
@@ -380,12 +339,10 @@ Feel free to add more `.md` files! Ideas:
 | | gcp-networking.md | 14 | 10-15 min |
 | | gcp-storage-databases.md | 14 | 10-15 min |
 | **Cloud/AWS** | aws-fundamentals.md | 14 | 10-15 min |
-| **Languages** | spanish-basics.md | 20 (40) | 10-15 min |
-| **General** | world-capitals.md | 10 | 5 min |
 | | | | |
-| **TOTAL** | **13 files** | **169 (189)** | **2-3 hours** |
+| **TOTAL** | **11 files** | **139 cards** | **2 hours** |
 
-**Note**: Kubernetes + Cloud materials add 125+ new cards for DevOps/Cloud professionals!
+**Note**: Comprehensive Kubernetes + Cloud materials for DevOps/Cloud professionals!
 
 ---
 
@@ -401,23 +358,6 @@ Feel free to add more `.md` files! Ideas:
 4. **Suspend difficult cards** temporarily if overwhelmed
 5. **Add your own context** by editing cards
 6. **Create custom decks** for specific goals
-
----
-
-## 🔄 **Updates**
-
-**Latest (Current Session)**:
-- ✅ Kubernetes comprehensive coverage (Fundamentals, Advanced, Production)
-- ✅ GCP complete study materials (Services, Architecture, Networking, Storage/Databases)
-- ✅ AWS Fundamentals
-
-**Coming Soon**:
-- [ ] More AWS topics (Serverless, Security, Advanced Networking)
-- [ ] Azure fundamentals and services
-- [ ] System design patterns
-- [ ] Interview preparation decks
-- [ ] More programming languages (Python, Go, TypeScript)
-- [ ] Professional certification materials (CKA, AWS SAA, GCP ACE)
 
 ---
 
