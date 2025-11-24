@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  recall-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: recall-app:latest
+    container_name: recall-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "com.recall-app.description=RE-CA-LL Spaced Repetition PWA"
+      - "com.recall-app.version=1.0.0"
