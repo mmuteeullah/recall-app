@@ -1,0 +1,342 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Enable GPU acceleration for smoother animations */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /*
+   * OLED Dark Mode - True Black (#000000)
+   *
+   * Design Philosophy:
+   * - Use true black (#000000) for maximum power savings on OLED displays
+   * - Use muted white text (#F5F5F5) instead of pure white to prevent halation effect
+   * - Subtle borders (rgba(255, 255, 255, 0.1)) to prevent elements from disappearing
+   * - Elevated surfaces use #121212 for layering
+   */
+  body {
+    @apply bg-white dark:bg-oled-black text-gray-900 dark:text-neutral-100;
+    margin: 0;
+    min-height: 100vh;
+    /* Smooth color transitions */
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Ensure scrollbar is styled for OLED mode */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-oled-black;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-neutral-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500 dark:bg-neutral-500;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Selection colors for OLED mode */
+  ::selection {
+    @apply bg-brand-400 text-white dark:bg-brand-500 dark:text-oled-black;
+  }
+
+  ::-moz-selection {
+    @apply bg-brand-400 text-white dark:bg-brand-500 dark:text-oled-black;
+  }
+}
+
+@layer components {
+  /*
+   * Premium Button Styles
+   * Updated for OLED compatibility
+   */
+  .btn-primary {
+    @apply bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700
+           text-white font-semibold py-2.5 px-5 rounded-xl
+           shadow-brand dark:shadow-glow-brand
+           transition-all duration-300
+           hover:scale-105 hover:shadow-xl
+           active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300
+           dark:bg-oled-card dark:hover:bg-oled-elevated
+           dark:border dark:border-neutral-600
+           text-gray-900 dark:text-neutral-100
+           font-semibold py-2.5 px-5 rounded-xl
+           transition-all duration-300
+           hover:scale-105
+           active:scale-95;
+  }
+
+  /*
+   * Premium Card Component
+   * Designed for OLED mode with subtle borders and glows
+   */
+  .card {
+    @apply bg-white dark:bg-oled-card
+           rounded-2xl shadow-elevation-2
+           dark:shadow-none dark:border dark:border-neutral-800
+           p-6
+           transition-all duration-300;
+  }
+
+  .card-elevated {
+    @apply bg-white dark:bg-oled-elevated
+           rounded-2xl shadow-elevation-3
+           dark:shadow-glow-brand/20 dark:border dark:border-neutral-700
+           p-6
+           transition-all duration-300
+           hover:shadow-elevation-4 dark:hover:shadow-glow-brand/40
+           hover:scale-[1.02];
+  }
+
+  /* NeoPOP-inspired card with bold border */
+  .card-neopop {
+    @apply bg-white dark:bg-oled-card
+           rounded-2xl
+           border-3 border-brand-400 dark:border-brand-500
+           shadow-neopop-brand
+           p-6
+           transition-all duration-300
+           hover:translate-x-[-2px] hover:translate-y-[-2px]
+           hover:shadow-neopop-layered;
+  }
+
+  /* Glassmorphism card for OLED */
+  .card-glass {
+    @apply backdrop-blur-xl
+           bg-white/10 dark:bg-oled-card/80
+           rounded-2xl
+           border border-white/20 dark:border-neutral-600/30
+           shadow-elevation-2 dark:shadow-glow-brand/10
+           p-6
+           transition-all duration-300;
+  }
+
+  /*
+   * Input Fields - OLED Optimized
+   */
+  .input-field {
+    @apply bg-gray-50 dark:bg-oled-card
+           border border-gray-300 dark:border-neutral-600
+           text-gray-900 dark:text-neutral-100
+           placeholder:text-gray-400 dark:placeholder:text-neutral-400
+           rounded-xl px-4 py-2.5
+           focus:ring-2 focus:ring-brand-500 focus:border-transparent
+           dark:focus:ring-brand-400 dark:focus:shadow-glow-brand/30
+           transition-all duration-300;
+  }
+
+  /*
+   * Badge Components
+   */
+  .badge {
+    @apply inline-flex items-center gap-1
+           px-3 py-1 rounded-full
+           text-xs font-semibold
+           transition-all duration-300;
+  }
+
+  .badge-brand {
+    @apply bg-brand-100 text-brand-700
+           dark:bg-brand-500/20 dark:text-brand-300
+           dark:border dark:border-brand-500/30;
+  }
+
+  .badge-success {
+    @apply bg-success-100 text-success-700
+           dark:bg-success-500/20 dark:text-success-300
+           dark:border dark:border-success-500/30;
+  }
+
+  .badge-warning {
+    @apply bg-warning-100 text-warning-700
+           dark:bg-warning-500/20 dark:text-warning-300
+           dark:border dark:border-warning-500/30;
+  }
+
+  .badge-error {
+    @apply bg-error-100 text-error-700
+           dark:bg-error-500/20 dark:text-error-300
+           dark:border dark:border-error-500/30;
+  }
+
+  /*
+   * Typography Utilities
+   */
+  .heading-1 {
+    @apply text-5xl md:text-6xl font-black tracking-tight
+           text-gray-900 dark:text-neutral-50;
+  }
+
+  .heading-2 {
+    @apply text-4xl md:text-5xl font-extrabold tracking-tight
+           text-gray-900 dark:text-neutral-50;
+  }
+
+  .heading-3 {
+    @apply text-3xl md:text-4xl font-bold tracking-tight
+           text-gray-900 dark:text-neutral-100;
+  }
+
+  .body-large {
+    @apply text-lg leading-relaxed
+           text-gray-700 dark:text-neutral-200;
+  }
+
+  .body-base {
+    @apply text-base leading-normal
+           text-gray-700 dark:text-neutral-200;
+  }
+
+  .body-small {
+    @apply text-sm leading-normal
+           text-gray-600 dark:text-neutral-300;
+  }
+
+  .text-muted {
+    @apply text-gray-500 dark:text-neutral-400;
+  }
+
+  /*
+   * Gradient Text Utility
+   */
+  .text-gradient {
+    @apply bg-gradient-cyber bg-clip-text text-transparent;
+  }
+
+  .text-gradient-neon {
+    @apply bg-gradient-neon bg-clip-text text-transparent;
+  }
+
+  /*
+   * Loading Animations
+   */
+  .loading-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .loading-spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+@layer utilities {
+  /*
+   * OLED-specific utilities
+   * Note: Basic OLED colors (bg-oled-black, bg-oled-card, etc.) are auto-generated by Tailwind
+   */
+  .border-oled-subtle {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /*
+   * Glow effects for OLED
+   */
+  .glow-brand {
+    @apply dark:shadow-glow-brand;
+  }
+
+  .glow-accent {
+    @apply dark:shadow-glow-accent;
+  }
+
+  .glow-success {
+    @apply dark:shadow-glow-success;
+  }
+
+  /*
+   * NeoPOP-style transforms
+   */
+  .neopop-float:hover {
+    transform: translate(-2px, -2px);
+  }
+
+  /*
+   * Performance optimizations
+   */
+  .gpu-accelerate {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+
+  /*
+   * Premium focus rings
+   */
+  .focus-ring-brand {
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
+           dark:focus:ring-brand-400 dark:focus:ring-offset-oled-black;
+  }
+
+  .focus-ring-accent {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2
+           dark:focus:ring-accent-400 dark:focus:ring-offset-oled-black;
+  }
+}
+
+/*
+ * Print Styles
+ */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+
+  .no-print {
+    display: none;
+  }
+}
+
+/*
+ * Reduced Motion Support (Accessibility)
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
