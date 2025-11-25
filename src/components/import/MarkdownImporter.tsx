@@ -10,92 +10,119 @@ import type { Card } from '../../types';
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'complete';
 
+interface ParsedFile {
+  filename: string;
+  parsed: ParsedMarkdown;
+}
+
+interface FileImportResult {
+  filename: string;
+  success: boolean;
+  deckId?: number;
+  deckPath: string;
+  cardsCreated: number;
+  errors: string[];
+}
+
 export function MarkdownImporter() {
   const navigate = useNavigate();
-  const { decks, createDeck } = useDecks();
+  const { createDeck } = useDecks();
 
   const [step, setStep] = useState<ImportStep>('upload');
-  const [filename, setFilename] = useState('');
-  const [parsed, setParsed] = useState<ParsedMarkdown | null>(null);
-  const [importResult, setImportResult] = useState<{
-    success: boolean;
-    deckId?: number;
-    cardsCreated: number;
-    errors: string[];
-  } | null>(null);
+  const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
+  const [importResults, setImportResults] = useState<FileImportResult[]>([]);
 
-  const handleFileSelect = (content: string, name: string) => {
-    setFilename(name);
-    const result = parseMarkdownFile(content);
-    setParsed(result);
-
-    if (result.errors.length === 0 && result.cards.length > 0) {
-      setStep('preview');
-    } else {
-      setStep('preview'); // Show preview even with errors
-    }
+  const handleFileSelect = (files: Array<{ content: string; filename: string }>) => {
+    const results: ParsedFile[] = files.map(({ content, filename }) => ({
+      filename,
+      parsed: parseMarkdownFile(content),
+    }));
+    setParsedFiles(results);
+    setStep('preview');
   };
 
   const handleReset = () => {
     setStep('upload');
-    setFilename('');
-    setParsed(null);
-    setImportResult(null);
+    setParsedFiles([]);
+    setImportResults([]);
   };
 
-  const handleImport = async () => {
-    if (!parsed || parsed.cards.length === 0) return;
+  // Helper to get or create deck hierarchy, using fresh deck list
+  const getOrCreateDeckHierarchy = async (deckPath: string): Promise<number | null> => {
+    const deckParts = parseDeckPath(deckPath);
+    let parentId: number | null = null;
+    let targetDeckId: number | null = null;
 
-    setStep('importing');
+    for (const deckName of deckParts) {
+      // Fetch fresh deck list from DB to see newly created decks
+      const currentDecks = await db.decks.toArray();
+      const existingDeck = currentDecks.find(
+        (d) => d.name === deckName && d.parentId === parentId
+      );
+
+      if (existingDeck) {
+        targetDeckId = existingDeck.id!;
+        parentId = existingDeck.id!;
+      } else {
+        const newDeckId = await createDeck({
+          name: deckName,
+          parentId,
+        });
+        targetDeckId = newDeckId as number;
+        parentId = newDeckId as number;
+      }
+    }
+
+    return targetDeckId;
+  };
+
+  const importSingleFile = async (parsedFile: ParsedFile): Promise<FileImportResult> => {
+    const { filename, parsed } = parsedFile;
+    const errors: string[] = [];
+
+    // Check for parse errors
+    if (parsed.errors.length > 0) {
+      errors.push(...parsed.errors);
+    }
+
+    if (parsed.cards.length === 0) {
+      return {
+        filename,
+        success: false,
+        deckPath: parsed.deckPath,
+        cardsCreated: 0,
+        errors: [...errors, 'No cards found in file'],
+      };
+    }
+
+    // Validate deck path
+    const validation = validateDeckPath(parsed.deckPath);
+    if (!validation.valid) {
+      return {
+        filename,
+        success: false,
+        deckPath: parsed.deckPath,
+        cardsCreated: 0,
+        errors: [...errors, validation.error || 'Invalid deck path'],
+      };
+    }
 
     try {
-      // Validate deck path
-      const validation = validateDeckPath(parsed.deckPath);
-      if (!validation.valid) {
-        setImportResult({
-          success: false,
-          cardsCreated: 0,
-          errors: [validation.error || 'Invalid deck path'],
-        });
-        setStep('complete');
-        return;
-      }
-
-      // Parse deck hierarchy
-      const deckParts = parseDeckPath(parsed.deckPath);
-
-      // Find or create decks in hierarchy
-      let parentId: number | null = null;
-      let targetDeckId: number | null = null;
-
-      for (const deckName of deckParts) {
-        // Find existing deck with this name and parent
-        const existingDeck = decks.find(
-          (d) => d.name === deckName && d.parentId === parentId
-        );
-
-        if (existingDeck) {
-          targetDeckId = existingDeck.id!;
-          parentId = existingDeck.id!;
-        } else {
-          // Create new deck
-          const newDeckId = await createDeck({
-            name: deckName,
-            parentId,
-          });
-          targetDeckId = newDeckId as number;
-          parentId = newDeckId as number;
-        }
-      }
+      const targetDeckId = await getOrCreateDeckHierarchy(parsed.deckPath);
 
       if (!targetDeckId) {
-        throw new Error('Failed to create or find target deck');
+        return {
+          filename,
+          success: false,
+          deckPath: parsed.deckPath,
+          cardsCreated: 0,
+          errors: [...errors, 'Failed to create or find target deck'],
+        };
       }
 
       // Import cards
       const now = Date.now();
       let cardsCreated = 0;
-      const errors: string[] = [];
 
       for (const parsedCard of parsed.cards) {
         try {
@@ -136,28 +163,64 @@ export function MarkdownImporter() {
         }
       }
 
-      setImportResult({
+      return {
+        filename,
         success: true,
         deckId: targetDeckId,
+        deckPath: parsed.deckPath,
         cardsCreated,
         errors,
-      });
-      setStep('complete');
+      };
     } catch (err) {
-      setImportResult({
+      return {
+        filename,
         success: false,
+        deckPath: parsed.deckPath,
         cardsCreated: 0,
-        errors: [err instanceof Error ? err.message : 'Unknown error during import'],
-      });
-      setStep('complete');
+        errors: [...errors, err instanceof Error ? err.message : 'Unknown error during import'],
+      };
     }
   };
 
-  const handleViewDeck = () => {
-    if (importResult?.deckId) {
-      navigate(`/deck/${importResult.deckId}`);
+  const handleImport = async () => {
+    const totalCards = parsedFiles.reduce((sum, f) => sum + f.parsed.cards.length, 0);
+    if (parsedFiles.length === 0 || totalCards === 0) return;
+
+    setStep('importing');
+
+    const results: FileImportResult[] = [];
+    for (const parsedFile of parsedFiles) {
+      const result = await importSingleFile(parsedFile);
+      results.push(result);
+    }
+
+    setImportResults(results);
+    setStep('complete');
+  };
+
+  const handleViewDeck = (deckId?: number) => {
+    if (deckId) {
+      navigate(`/deck/${deckId}`);
+    } else {
+      // Navigate to first successful deck
+      const firstSuccess = importResults.find(r => r.success && r.deckId);
+      if (firstSuccess?.deckId) {
+        navigate(`/deck/${firstSuccess.deckId}`);
+      } else {
+        navigate('/');
+      }
     }
   };
+
+  // Computed values for preview
+  const totalCards = parsedFiles.reduce((sum, f) => sum + f.parsed.cards.length, 0);
+  const totalErrors = parsedFiles.reduce((sum, f) => sum + f.parsed.errors.length, 0);
+  const filesWithCards = parsedFiles.filter(f => f.parsed.cards.length > 0);
+
+  // Computed values for results
+  const totalCardsCreated = importResults.reduce((sum, r) => sum + r.cardsCreated, 0);
+  const successfulImports = importResults.filter(r => r.success);
+  const failedImports = importResults.filter(r => !r.success);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -172,7 +235,7 @@ export function MarkdownImporter() {
           📥 Import Markdown Cards
         </h1>
         <p className="text-base font-medium text-gray-600 dark:text-gray-300">
-          Upload a markdown file to import flashcards in bulk
+          Upload markdown files to import flashcards in bulk
         </p>
       </motion.div>
 
@@ -216,13 +279,14 @@ export function MarkdownImporter() {
       )}
 
       {/* Preview Step */}
-      {step === 'preview' && parsed && (
+      {step === 'preview' && parsedFiles.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
           className="space-y-6"
         >
+          {/* Overall Summary */}
           <div className="
             bg-white dark:bg-neutral-800
             rounded-2xl
@@ -236,75 +300,94 @@ export function MarkdownImporter() {
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">File:</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{filename}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Files Selected:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{parsedFiles.length}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Deck:</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{parsed.deckPath}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Total Cards:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{totalCards}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Card Type:</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                  {parsed.cardType}
-                  {parsed.cardType === 'reverse' && ' (creates 2 cards per Q&A)'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Cards Found:</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {parsed.cards.length}
-                  {parsed.cardType === 'reverse' && ` (will create ${parsed.cards.length * 2} total)`}
-                </span>
-              </div>
-              {parsed.fileTags.length > 0 && (
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Tags:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {parsed.fileTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
+              {totalErrors > 0 && (
+                <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Parse Warnings:</span>
+                  <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">{totalErrors}</span>
                 </div>
               )}
             </div>
-
-            {/* Errors - NeoPOP */}
-            {parsed.errors.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                className="
-                  mt-5
-                  bg-gradient-to-br from-red-50 to-red-100/50
-                  dark:from-red-900/20 dark:to-red-800/20
-                  border-3 border-red-400 dark:border-red-600
-                  shadow-[3px_3px_0px_rgba(239,68,68,0.4)]
-                  dark:shadow-[3px_3px_0px_rgba(239,68,68,0.3)]
-                  rounded-xl p-5
-                "
-              >
-                <h4 className="text-base font-black text-red-900 dark:text-red-200 mb-3 flex items-center gap-2">
-                  ⚠️ Warnings & Errors
-                </h4>
-                <ul className="text-sm font-medium text-red-800 dark:text-red-300 space-y-2 list-disc list-inside">
-                  {parsed.errors.map((error, i) => (
-                    <li key={i}>{error}</li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
           </div>
 
-          {/* Card Preview */}
-          {parsed.cards.length > 0 && (
-            <CardPreview cards={parsed.cards} fileTags={parsed.fileTags} />
+          {/* Per-file details */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white">
+              Files to Import ({parsedFiles.length})
+            </h3>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {parsedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className={`
+                    bg-white dark:bg-neutral-800 rounded-xl p-4
+                    border-2 ${file.parsed.cards.length > 0
+                      ? 'border-brand-300 dark:border-brand-600'
+                      : 'border-red-300 dark:border-red-600'}
+                  `}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                        {file.filename}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        → {file.parsed.deckPath}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      <span className={`
+                        text-xs px-2 py-1 rounded-full font-medium
+                        ${file.parsed.cards.length > 0
+                          ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}
+                      `}>
+                        {file.parsed.cards.length} cards
+                      </span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 capitalize">
+                        {file.parsed.cardType}
+                      </span>
+                    </div>
+                  </div>
+                  {file.parsed.fileTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {file.parsed.fileTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {file.parsed.errors.length > 0 && (
+                    <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                      {file.parsed.errors.map((err, i) => (
+                        <p key={i}>⚠️ {err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Card Preview for all files */}
+          {filesWithCards.length > 0 && (
+            <CardPreview
+              files={filesWithCards.map(f => ({
+                filename: f.filename,
+                cards: f.parsed.cards,
+                fileTags: f.parsed.fileTags,
+              }))}
+            />
           )}
 
           {/* Actions - NeoPOP */}
@@ -329,7 +412,7 @@ export function MarkdownImporter() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={handleImport}
-              disabled={parsed.cards.length === 0}
+              disabled={totalCards === 0}
               className="
                 px-6 py-2.5
                 bg-gradient-to-r from-brand-500 via-brand-600 to-brand-700
@@ -341,7 +424,7 @@ export function MarkdownImporter() {
                 transition-all duration-200
               "
             >
-              📥 Import {parsed.cards.length} {parsed.cards.length === 1 ? 'Card' : 'Cards'}
+              📥 Import {totalCards} {totalCards === 1 ? 'Card' : 'Cards'} from {parsedFiles.length} {parsedFiles.length === 1 ? 'File' : 'Files'}
             </motion.button>
           </div>
         </motion.div>
@@ -367,7 +450,7 @@ export function MarkdownImporter() {
             <div className="absolute inset-0 animate-spin rounded-full h-20 w-20 border-4 border-t-brand-600 dark:border-t-brand-400"></div>
           </div>
           <p className="text-2xl font-black text-gray-900 dark:text-white mb-3">
-            📦 Importing cards...
+            📦 Importing {parsedFiles.length} {parsedFiles.length === 1 ? 'file' : 'files'}...
           </p>
           <p className="text-base font-medium text-gray-600 dark:text-gray-300">
             Please wait while we create your cards
@@ -376,132 +459,143 @@ export function MarkdownImporter() {
       )}
 
       {/* Complete Step - NeoPOP */}
-      {step === 'complete' && importResult && (
+      {step === 'complete' && importResults.length > 0 && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
           className="space-y-6"
         >
-          {importResult.success ? (
-            <div className="
-              bg-gradient-to-br from-success-50 to-success-100/50
-              dark:from-success-900/20 dark:to-success-800/20
-              border-4 border-success-400 dark:border-success-600
-              shadow-[5px_5px_0px_rgba(34,197,94,0.5)]
-              dark:shadow-[5px_5px_0px_rgba(34,197,94,0.4)]
-              rounded-2xl p-8 text-center
-            ">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
-                className="text-7xl mb-5"
-              >
-                ✅
-              </motion.div>
-              <h3 className="text-3xl font-black text-success-900 dark:text-success-200 mb-3">
-                Import Successful!
-              </h3>
-              <p className="text-lg font-bold text-success-800 dark:text-success-300 mb-6">
-                Successfully created {importResult.cardsCreated} {importResult.cardsCreated === 1 ? 'card' : 'cards'}
-              </p>
+          {/* Summary Card */}
+          <div className={`
+            rounded-2xl p-8 text-center
+            ${successfulImports.length > 0
+              ? 'bg-gradient-to-br from-success-50 to-success-100/50 dark:from-success-900/20 dark:to-success-800/20 border-4 border-success-400 dark:border-success-600 shadow-[5px_5px_0px_rgba(34,197,94,0.5)] dark:shadow-[5px_5px_0px_rgba(34,197,94,0.4)]'
+              : 'bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-900/20 dark:to-red-800/20 border-4 border-red-400 dark:border-red-600 shadow-[5px_5px_0px_rgba(239,68,68,0.5)] dark:shadow-[5px_5px_0px_rgba(239,68,68,0.4)]'
+            }
+          `}>
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
+              className="text-7xl mb-5"
+            >
+              {successfulImports.length > 0 ? (failedImports.length > 0 ? '⚠️' : '✅') : '❌'}
+            </motion.div>
+            <h3 className={`text-3xl font-black mb-3 ${
+              successfulImports.length > 0
+                ? 'text-success-900 dark:text-success-200'
+                : 'text-red-900 dark:text-red-200'
+            }`}>
+              {successfulImports.length > 0
+                ? (failedImports.length > 0 ? 'Import Partially Successful' : 'Import Successful!')
+                : 'Import Failed'}
+            </h3>
+            <p className={`text-lg font-bold mb-4 ${
+              successfulImports.length > 0
+                ? 'text-success-800 dark:text-success-300'
+                : 'text-red-800 dark:text-red-300'
+            }`}>
+              {totalCardsCreated > 0
+                ? `Created ${totalCardsCreated} ${totalCardsCreated === 1 ? 'card' : 'cards'} from ${successfulImports.length} ${successfulImports.length === 1 ? 'file' : 'files'}`
+                : 'No cards were imported'}
+            </p>
+          </div>
 
-              {importResult.errors.length > 0 && (
-                <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-200 mb-2">
-                    Some cards had issues:
-                  </h4>
-                  <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1 list-disc list-inside text-left">
-                    {importResult.errors.map((error, i) => (
-                      <li key={i}>{error}</li>
-                    ))}
-                  </ul>
+          {/* Per-file Results */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white">
+              Import Results
+            </h3>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {importResults.map((result, index) => (
+                <div
+                  key={index}
+                  className={`
+                    flex items-center justify-between p-4 rounded-xl
+                    ${result.success
+                      ? 'bg-success-50 dark:bg-success-900/20 border-2 border-success-300 dark:border-success-700'
+                      : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700'}
+                  `}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{result.success ? '✅' : '❌'}</span>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                        {result.filename}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 ml-7">
+                      → {result.deckPath}
+                    </p>
+                    {result.errors.length > 0 && (
+                      <p className="text-xs text-red-600 dark:text-red-400 ml-7 mt-1">
+                        {result.errors[0]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 ml-3">
+                    <span className={`
+                      text-xs px-2 py-1 rounded-full font-medium
+                      ${result.success
+                        ? 'bg-success-100 dark:bg-success-800/30 text-success-700 dark:text-success-300'
+                        : 'bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300'}
+                    `}>
+                      {result.cardsCreated} cards
+                    </span>
+                    {result.success && result.deckId && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleViewDeck(result.deckId)}
+                        className="text-xs px-2 py-1 rounded-full bg-brand-100 dark:bg-brand-800/30 text-brand-700 dark:text-brand-300 font-medium hover:bg-brand-200 dark:hover:bg-brand-700/30"
+                      >
+                        View
+                      </motion.button>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              <div className="flex items-center justify-center gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleReset}
-                  className="
-                    px-6 py-2.5
-                    bg-white dark:bg-neutral-700
-                    border-2 border-gray-300 dark:border-neutral-600
-                    text-gray-700 dark:text-gray-200
-                    font-bold rounded-xl
-                    hover:border-gray-400 dark:hover:border-neutral-500
-                    transition-all duration-200
-                  "
-                >
-                  Import Another File
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleViewDeck}
-                  className="
-                    px-6 py-2.5
-                    bg-gradient-to-r from-success-500 via-success-600 to-success-700
-                    text-white font-black rounded-xl
-                    shadow-[0_4px_14px_rgba(34,197,94,0.4)]
-                    hover:shadow-[0_6px_20px_rgba(34,197,94,0.6)]
-                    border-2 border-success-300
-                    transition-all duration-200
-                  "
-                >
-                  📂 View Deck
-                </motion.button>
-              </div>
+              ))}
             </div>
-          ) : (
-            <div className="
-              bg-gradient-to-br from-red-50 to-red-100/50
-              dark:from-red-900/20 dark:to-red-800/20
-              border-4 border-red-400 dark:border-red-600
-              shadow-[5px_5px_0px_rgba(239,68,68,0.5)]
-              dark:shadow-[5px_5px_0px_rgba(239,68,68,0.4)]
-              rounded-2xl p-8 text-center
-            ">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
-                className="text-7xl mb-5"
-              >
-                ❌
-              </motion.div>
-              <h3 className="text-3xl font-black text-red-900 dark:text-red-200 mb-3">
-                Import Failed
-              </h3>
-              <div className="text-red-800 dark:text-red-300 mb-6">
-                <p className="text-lg font-bold mb-4">The import could not be completed:</p>
-                <ul className="text-sm font-medium space-y-2 list-disc list-inside text-left max-w-md mx-auto">
-                  {importResult.errors.map((error, i) => (
-                    <li key={i}>{error}</li>
-                  ))}
-                </ul>
-              </div>
+          </div>
 
+          {/* Actions */}
+          <div className="flex items-center justify-center gap-3">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleReset}
+              className="
+                px-6 py-2.5
+                bg-white dark:bg-neutral-700
+                border-2 border-gray-300 dark:border-neutral-600
+                text-gray-700 dark:text-gray-200
+                font-bold rounded-xl
+                hover:border-gray-400 dark:hover:border-neutral-500
+                transition-all duration-200
+              "
+            >
+              Import More Files
+            </motion.button>
+            {successfulImports.length > 0 && (
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={handleReset}
+                onClick={() => handleViewDeck()}
                 className="
                   px-6 py-2.5
-                  bg-gradient-to-r from-red-500 via-red-600 to-red-700
+                  bg-gradient-to-r from-success-500 via-success-600 to-success-700
                   text-white font-black rounded-xl
-                  shadow-[0_4px_14px_rgba(239,68,68,0.4)]
-                  hover:shadow-[0_6px_20px_rgba(239,68,68,0.6)]
-                  border-2 border-red-300
+                  shadow-[0_4px_14px_rgba(34,197,94,0.4)]
+                  hover:shadow-[0_6px_20px_rgba(34,197,94,0.6)]
+                  border-2 border-success-300
                   transition-all duration-200
                 "
               >
-                🔄 Try Again
+                📂 View Decks
               </motion.button>
-            </div>
-          )}
+            )}
+          </div>
         </motion.div>
       )}
     </div>

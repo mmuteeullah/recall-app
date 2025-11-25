@@ -2,11 +2,12 @@ import { useState, useRef, type DragEvent, type ChangeEvent } from 'react';
 import { motion } from 'framer-motion';
 
 interface FileUploadProps {
-  onFileSelect: (content: string, filename: string) => void;
+  onFileSelect: (files: Array<{ content: string; filename: string }>) => void;
   accept?: string;
+  multiple?: boolean;
 }
 
-export function FileUpload({ onFileSelect, accept = '.md,.markdown' }: FileUploadProps) {
+export function FileUpload({ onFileSelect, accept = '.md,.markdown', multiple = true }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -20,35 +21,52 @@ export function FileUpload({ onFileSelect, accept = '.md,.markdown' }: FileUploa
     setIsDragging(false);
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
-    const mdFile = files.find(f => f.name.endsWith('.md') || f.name.endsWith('.markdown'));
+    const mdFiles = files.filter(f => f.name.endsWith('.md') || f.name.endsWith('.markdown'));
 
-    if (mdFile) {
-      readFile(mdFile);
+    if (mdFiles.length > 0) {
+      const filesToProcess = multiple ? mdFiles : [mdFiles[0]];
+      await readFiles(filesToProcess);
     }
   };
 
-  const handleFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      readFile(file);
+  const handleFileInput = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      await readFiles(fileArray);
+    }
+    // Reset input so the same file(s) can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  const readFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      onFileSelect(content, file.name);
-    };
-    reader.onerror = () => {
-      alert('Error reading file. Please try again.');
-    };
-    reader.readAsText(file);
+  const readFile = (file: File): Promise<{ content: string; filename: string }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        resolve({ content, filename: file.name });
+      };
+      reader.onerror = () => {
+        reject(new Error(`Error reading file: ${file.name}`));
+      };
+      reader.readAsText(file);
+    });
+  };
+
+  const readFiles = async (files: File[]) => {
+    try {
+      const results = await Promise.all(files.map(readFile));
+      onFileSelect(results);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error reading files. Please try again.');
+    }
   };
 
   const handleClick = () => {
@@ -62,6 +80,7 @@ export function FileUpload({ onFileSelect, accept = '.md,.markdown' }: FileUploa
         type="file"
         accept={accept}
         onChange={handleFileInput}
+        multiple={multiple}
         className="hidden"
       />
 
@@ -112,10 +131,10 @@ export function FileUpload({ onFileSelect, accept = '.md,.markdown' }: FileUploa
 
           <div>
             <p className="text-xl font-black text-gray-900 dark:text-white mb-2">
-              📄 Drop your markdown file here
+              📄 Drop your markdown {multiple ? 'files' : 'file'} here
             </p>
             <p className="text-base font-medium text-gray-600 dark:text-gray-300">
-              or click to browse
+              or click to browse {multiple && '(select multiple)'}
             </p>
           </div>
 
@@ -133,7 +152,7 @@ export function FileUpload({ onFileSelect, accept = '.md,.markdown' }: FileUploa
               transition-all duration-200
             "
           >
-            📁 Select File
+            📁 Select {multiple ? 'Files' : 'File'}
           </motion.button>
 
           <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">
