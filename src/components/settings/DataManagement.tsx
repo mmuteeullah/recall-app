@@ -16,14 +16,18 @@
  * - Results: Dynamic success/error colors based on import outcome
  */
 import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { downloadExport, importFromFile, type ImportResult } from '../../lib/export';
+import { db } from '../../lib/db';
 
 export function DataManagement() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [clearExisting, setClearExisting] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearResult, setClearResult] = useState<{ success: boolean; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -65,6 +69,35 @@ export function DataManagement() {
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      setClearing(true);
+      setClearResult(null);
+
+      // Clear all tables
+      await Promise.all([
+        db.cards.clear(),
+        db.decks.clear(),
+        db.reviews.clear(),
+        db.stats.clear(),
+        db.settings.clear(),
+      ]);
+
+      setClearResult({
+        success: true,
+        message: 'All data has been cleared successfully.',
+      });
+      setShowClearConfirm(false);
+    } catch (error) {
+      setClearResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to clear data',
+      });
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -378,6 +411,200 @@ export function DataManagement() {
           </div>
         </div>
       </motion.div>
+
+      {/* Clear All Data Section - NeoPOP */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.4 }}
+        className="
+          bg-white dark:bg-neutral-800
+          rounded-2xl
+          border-4 border-red-400 dark:border-red-500
+          shadow-[5px_5px_0px_rgba(239,68,68,0.6)]
+          dark:shadow-[5px_5px_0px_rgba(239,68,68,0.5)]
+          p-6
+        "
+      >
+        <div className="flex items-start gap-4">
+          <div className="
+            flex-shrink-0 w-14 h-14
+            bg-gradient-to-br from-red-400 to-red-500
+            rounded-xl
+            flex items-center justify-center
+            text-3xl
+            shadow-[3px_3px_0px_rgba(239,68,68,0.4)]
+          ">
+            🗑️
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white mb-2">
+              Clear All Data
+            </h3>
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
+              Permanently delete all your decks, cards, review history, statistics, and settings.
+              This action cannot be undone.
+            </p>
+            <ul className="text-sm font-medium text-red-600 dark:text-red-400 mb-5 space-y-1.5">
+              <li>• All decks and cards will be deleted</li>
+              <li>• All review history will be lost</li>
+              <li>• All statistics will be reset</li>
+              <li>• Settings will be reset to defaults</li>
+            </ul>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowClearConfirm(true)}
+              className="
+                px-6 py-2.5
+                bg-gradient-to-r from-red-500 via-red-600 to-red-700
+                text-white font-black rounded-xl
+                shadow-[0_4px_14px_rgba(239,68,68,0.4)]
+                hover:shadow-[0_6px_20px_rgba(239,68,68,0.6)]
+                border-2 border-red-300
+                transition-all duration-200
+                flex items-center gap-2
+              "
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Clear Everything
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Clear Result */}
+        {clearResult && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className={`mt-5 p-5 rounded-xl ${
+              clearResult.success
+                ? 'bg-gradient-to-br from-success-50 to-success-100/50 dark:from-success-900/20 dark:to-success-800/20 border-3 border-success-400 dark:border-success-600 shadow-[3px_3px_0px_rgba(34,197,94,0.4)]'
+                : 'bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-900/20 dark:to-red-800/20 border-3 border-red-400 dark:border-red-600 shadow-[3px_3px_0px_rgba(239,68,68,0.4)]'
+            }`}>
+            <div className="flex gap-3">
+              {clearResult.success ? (
+                <svg className="w-6 h-6 text-success-600 dark:text-success-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+              <p className={`text-sm font-black ${
+                clearResult.success
+                  ? 'text-success-800 dark:text-success-200'
+                  : 'text-red-800 dark:text-red-200'
+              }`}>
+                {clearResult.message}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => !clearing && setShowClearConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              className="
+                bg-white dark:bg-neutral-800
+                rounded-2xl
+                border-4 border-red-400 dark:border-red-500
+                shadow-[8px_8px_0px_rgba(239,68,68,0.6)]
+                dark:shadow-[8px_8px_0px_rgba(239,68,68,0.5)]
+                p-6 max-w-md w-full
+              "
+            >
+              <div className="text-center">
+                <div className="
+                  w-16 h-16 mx-auto mb-4
+                  bg-gradient-to-br from-red-400 to-red-500
+                  rounded-full
+                  flex items-center justify-center
+                  text-4xl
+                  shadow-[4px_4px_0px_rgba(239,68,68,0.4)]
+                ">
+                  ⚠️
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
+                  Are you sure?
+                </h3>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-6">
+                  This will permanently delete <span className="font-black text-red-600 dark:text-red-400">ALL</span> your data including decks, cards, review history, and statistics.
+                  This action <span className="font-black text-red-600 dark:text-red-400">cannot be undone</span>.
+                </p>
+
+                <div className="flex gap-3 justify-center">
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setShowClearConfirm(false)}
+                    disabled={clearing}
+                    className="
+                      px-6 py-2.5
+                      bg-white dark:bg-neutral-700
+                      border-2 border-gray-300 dark:border-neutral-600
+                      text-gray-700 dark:text-gray-200
+                      font-bold rounded-xl
+                      hover:border-gray-400 dark:hover:border-neutral-500
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      transition-all duration-200
+                    "
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleClearAll}
+                    disabled={clearing}
+                    className="
+                      px-6 py-2.5
+                      bg-gradient-to-r from-red-500 via-red-600 to-red-700
+                      text-white font-black rounded-xl
+                      shadow-[0_4px_14px_rgba(239,68,68,0.4)]
+                      hover:shadow-[0_6px_20px_rgba(239,68,68,0.6)]
+                      border-2 border-red-300
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      transition-all duration-200
+                      flex items-center gap-2
+                    "
+                  >
+                    {clearing ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Clearing...
+                      </>
+                    ) : (
+                      'Yes, Clear Everything'
+                    )}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
